@@ -1,0 +1,93 @@
+function [sig,Aopt,bopt] = findAffine(X,Y,A0,b0,sg0,C,c,varargin)
+
+if ~isempty(varargin)
+    verbose = varargin{1};
+else
+    verbose = false;
+end
+
+eta0 = [A0(1,1);...
+    A0(1,2);...
+    A0(1,3);...
+    A0(2,1);...
+    A0(2,2);...
+    A0(2,3);...
+    A0(3,1);...
+    A0(3,2);...
+    A0(3,3);...
+    b0(1);...
+    b0(2);...
+    b0(3);...
+    sg0 ];
+
+if verbose
+    opts = optimoptions('fmincon',...
+        'Display','final-detailed',...
+        'StepTolerance',10^(-30),...
+        'MaxFunctionEvaluations',1E4,...
+        'MaxIterations',1E4);
+else
+    opts = optimoptions('fmincon',...
+        'Display','notify',...
+        'StepTolerance',10^(-30),...
+        'MaxFunctionEvaluations',1E4,...
+        'MaxIterations',1E4);
+end
+    global indx;
+    indx = 1;
+    
+    [etaopt,~] = fmincon(@(params)NLL_BVG(params,X,Y,verbose),eta0,C,c,[],[],[],[],[],opts);
+    
+    Aopt = [etaopt(1) etaopt(2) etaopt(3); ...
+        etaopt(4) etaopt(5) etaopt(6); ...
+        etaopt(7) etaopt(8) etaopt(9)];
+    
+    bopt = [etaopt(10); etaopt(11); etaopt(12)];
+    
+    sig = etaopt(13);
+    
+end
+
+    function out = p_Y(y,x,A,b,sg)
+        
+        [~,N] = size(y);
+        
+        mu = A*x+b;
+        
+        out = zeros(1,N);
+        
+        for n = 1:N
+            out(n) = 1/sqrt((2*pi)^2*sg^2)*...
+                exp(-1/(2*sg^2)*(y(:,n)-mu(:,n))'*(y(:,n)-mu(:,n)));
+        end
+        
+        
+    end
+
+    function out = NLL_BVG(params,X,Y,varargin)
+        
+        if ~isempty(varargin)
+            verbose = varargin{1};
+        end
+        
+        A  = [params(1) params(2) params(3);...
+            params(4) params(5) params(6); ...
+            params(7) params(8) params(9)];
+        b  = [params(10); ...
+            params(11); ...
+            params(12)];
+        
+        sg = params(13);
+        
+        Ln = p_Y(Y,X,A,b,sg);
+        out = -sum(log(Ln));
+        
+        if verbose
+            global indx;
+            fprintf('%i: a11: %07.3f \t a21: %07.3f \t a12: %07.3f \t a22: %07.3f \t b1: %07.3f \t b2: %07.3f \t sg: %07.3f \t NLL:%07.3f\n',...
+                indx,A(1,1),A(2,1),A(1,2),A(2,2),b(1),b(2),sg,out);
+            indx = indx+1;
+        end
+        
+        
+    end
